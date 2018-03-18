@@ -30,7 +30,8 @@ namespace MvcIdentityServerCenter
                     ClientUri = "http://localhost:5001",
                     LogoUri = "https://chocolatey.org/content/packageimages/dotnetcore-runtime.install.2.0.5.png",
                     AllowRememberConsent = true,
-                    AllowedGrantTypes = GrantTypes.HybridAndClientCredentials,
+                    AllowedGrantTypes = GrantTypes.ImplicitAndClientCredentials,
+                    AllowAccessTokensViaBrowser = true,
                     ClientSecrets =
                     {
                         new Secret("secret".Sha256())

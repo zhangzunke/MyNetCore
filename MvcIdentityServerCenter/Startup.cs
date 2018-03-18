@@ -13,6 +13,10 @@ using MvcIdentityServerCenter.Models;
 using MvcIdentityServerCenter.Services;
 using IdentityServer4;
 using IdentityServer4.Services;
+using IdentityServer4.EntityFramework;
+using System.Reflection;
+using IdentityServer4.EntityFramework.DbContexts;
+using IdentityServer4.EntityFramework.Mappers;
 
 namespace MvcIdentityServerCenter
 {
@@ -28,6 +32,13 @@ namespace MvcIdentityServerCenter
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+
+            const string connectionString = "Server=WL000731398;Database=IdentityServerCenterStore;Trusted_Connection=True;MultipleActiveResultSets=true";
+            var migtationAssembly = typeof(Startup).GetTypeInfo().Assembly.GetName().Name;
+
+            //IdentityServer4.EntityFramework.DbContexts.ConfigurationDbContext
+            //IdentityServer4.EntityFramework.DbContexts.PersistedGrantDbContext
+
             services.AddDbContext<ApplicationDbContext>(options =>
                options.UseSqlServer(Configuration.GetConnectionString("DefaultConnection")));
 
@@ -38,9 +49,27 @@ namespace MvcIdentityServerCenter
 
             services.AddIdentityServer()
                 .AddDeveloperSigningCredential()
-                .AddInMemoryClients(Config.GetClients())
-                .AddInMemoryApiResources(Config.GetApiResources())
-                .AddInMemoryIdentityResources(Config.GetIdentityResources())
+                //.AddInMemoryClients(Config.GetClients())
+                //.AddInMemoryApiResources(Config.GetApiResources())
+                //.AddInMemoryIdentityResources(Config.GetIdentityResources())
+                //store scope api ect
+                .AddConfigurationStore(options => {
+                    options.ConfigureDbContext = builder =>
+                    {
+                        //init sql server and migration
+                        builder.UseSqlServer(connectionString,
+                            sql => sql.MigrationsAssembly(migtationAssembly));
+                    };
+                })
+                //store token grant
+                .AddOperationalStore(options => {
+                    options.ConfigureDbContext = builder =>
+                    {
+                        //init sql server and migration
+                        builder.UseSqlServer(connectionString,
+                            sql => sql.MigrationsAssembly(migtationAssembly));
+                    };
+                })
                 .AddAspNetIdentity<ApplicationUser>()
                 .Services.AddScoped<IProfileService, ProfileService>();
             //.AddTestUsers(Config.GetTestUsers());
@@ -88,6 +117,8 @@ namespace MvcIdentityServerCenter
                 app.UseExceptionHandler("/Home/Error");
             }
 
+            InitIdentityServerDataBase(app);
+
             app.UseStaticFiles();
 
             //app.UseAuthentication();
@@ -99,6 +130,45 @@ namespace MvcIdentityServerCenter
                     name: "default",
                     template: "{controller=Home}/{action=Index}/{id?}");
             });
+        }
+
+        public void InitIdentityServerDataBase(IApplicationBuilder app)
+        {
+            using (var scope = app.ApplicationServices.CreateScope())
+            {
+                scope.ServiceProvider.GetRequiredService<PersistedGrantDbContext>();
+                var configurationDbContext = scope.ServiceProvider.GetRequiredService<ConfigurationDbContext>();
+
+                if (!configurationDbContext.Clients.Any())
+                {
+                    foreach (var client in Config.GetClients())
+                    {
+                        configurationDbContext.Clients.Add(client.ToEntity());
+                    }
+
+                    configurationDbContext.SaveChanges();
+                }
+
+                if (!configurationDbContext.ApiResources.Any())
+                {
+                    foreach (var api in Config.GetApiResources())
+                    {
+                        configurationDbContext.ApiResources.Add(api.ToEntity());
+                    }
+
+                    configurationDbContext.SaveChanges();
+                }
+
+                if (!configurationDbContext.IdentityResources.Any())
+                {
+                    foreach (var resource in Config.GetIdentityResources())
+                    {
+                        configurationDbContext.IdentityResources.Add(resource.ToEntity());
+                    }
+
+                    configurationDbContext.SaveChanges();
+                }
+            }
         }
     }
 }
